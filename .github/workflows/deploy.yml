@@ -1,0 +1,215 @@
+# ============================================================
+# Momlingo — GitHub Actions CI/CD
+#
+# File này thuộc GitHub public repo (momlingo-ci-cd).
+# KHÔNG commit source code Flutter vào repo này.
+#
+# 2 cách trigger (không có GitHub UI — repo public):
+#   1. deploy.sh (local)                — tự động điền đủ inputs
+#   2. GitHub Actions (momlingo-mobile) — tự động điền đủ inputs
+# ============================================================
+
+name: Build & Deploy
+
+on:
+  repository_dispatch:
+    types: [deploy]
+
+env:
+  FLUTTER_VERSION: "3.38.5"
+  JAVA_VERSION: "17"
+
+# ── Payload từ momlingo-mobile Actions ──────────────────────
+# github.event.client_payload.tag
+# github.event.client_payload.flavor
+# github.event.client_payload.version
+# github.event.client_payload.build_number
+# github.event.client_payload.platform  (ios | android | both)
+
+jobs:
+# ============================================================
+# Job 1: Android — ubuntu-latest
+# ============================================================
+  deploy-android:
+    name: "Android"
+    runs-on: ubuntu-latest
+    if: github.event.client_payload.platform == 'android' || github.event.client_payload.platform == 'both'
+    steps:
+      - name: Checkout CI repo
+        uses: actions/checkout@v4
+
+      - name: Parse inputs từ tag
+        id: params
+        run: |
+          TAG="${{ github.event.client_payload.tag }}"
+          if [ -z "${{ github.event.client_payload.flavor }}" ]; then
+            FLAVOR="${TAG##*-}"
+          else
+            FLAVOR="${{ github.event.client_payload.flavor }}"
+          fi
+          if [ -z "${{ github.event.client_payload.version }}" ]; then
+            MIDDLE=$(echo "$TAG" | sed 's/^v//' | sed "s/-${FLAVOR}$//")
+            VERSION=$(echo "$MIDDLE" | cut -d'+' -f1)
+            BUILD_NUMBER=$(echo "$MIDDLE" | cut -d'+' -f2)
+          else
+            VERSION="${{ github.event.client_payload.version }}"
+            BUILD_NUMBER="${{ github.event.client_payload.build_number }}"
+          fi
+          echo "flavor=$FLAVOR"             >> $GITHUB_OUTPUT
+          echo "version=$VERSION"           >> $GITHUB_OUTPUT
+          echo "build_number=$BUILD_NUMBER" >> $GITHUB_OUTPUT
+
+      - name: Clone source từ GitHub
+        run: |
+          git clone \
+            "https://x-access-token:${{ secrets.GITHUB_SOURCE_TOKEN }}@github.com/TESOSOFTWARE/momlingo-mobile.git" \
+            source
+          cd source && git checkout "${{ github.event.client_payload.tag }}"
+
+      - name: Setup Java ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Setup Flutter ${{ env.FLUTTER_VERSION }}
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Setup Ruby & Fastlane
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          working-directory: source
+          bundler-cache: true
+
+      - name: Flutter pub get
+        working-directory: source
+        run: flutter pub get
+
+      - name: Generate code (build_runner)
+        working-directory: source
+        run: flutter pub run build_runner build --delete-conflicting-outputs
+
+      - name: Fastlane — Deploy Android (${{ steps.params.outputs.flavor }})
+        working-directory: source
+        env:
+          BUILD_VERSION: ${{ steps.params.outputs.version }}
+          BUILD_NUMBER:  ${{ steps.params.outputs.build_number }}
+          FLUTTER_CMD: flutter
+          ANDROID_KEYSTORE_BASE64:          ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD:        ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS:                ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD:             ${{ secrets.ANDROID_KEY_PASSWORD }}
+          GOOGLE_PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+        run: bundle exec fastlane android deploy_${{ steps.params.outputs.flavor }}
+
+# ============================================================
+# Job 2: iOS — macos-15
+# ============================================================
+  deploy-ios:
+    name: "iOS"
+    runs-on: macos-15
+    if: github.event.client_payload.platform != 'android'
+    steps:
+      - name: Checkout CI repo
+        uses: actions/checkout@v4
+
+      - name: Parse inputs từ tag
+        id: params
+        run: |
+          TAG="${{ github.event.client_payload.tag }}"
+          if [ -z "${{ github.event.client_payload.flavor }}" ]; then
+            FLAVOR="${TAG##*-}"
+          else
+            FLAVOR="${{ github.event.client_payload.flavor }}"
+          fi
+          if [ -z "${{ github.event.client_payload.version }}" ]; then
+            MIDDLE=$(echo "$TAG" | sed 's/^v//' | sed "s/-${FLAVOR}$//")
+            VERSION=$(echo "$MIDDLE" | cut -d'+' -f1)
+            BUILD_NUMBER=$(echo "$MIDDLE" | cut -d'+' -f2)
+          else
+            VERSION="${{ github.event.client_payload.version }}"
+            BUILD_NUMBER="${{ github.event.client_payload.build_number }}"
+          fi
+          echo "flavor=$FLAVOR"             >> $GITHUB_OUTPUT
+          echo "version=$VERSION"           >> $GITHUB_OUTPUT
+          echo "build_number=$BUILD_NUMBER" >> $GITHUB_OUTPUT
+
+      - name: Clone source từ GitHub
+        run: |
+          git clone \
+            "https://x-access-token:${{ secrets.GITHUB_SOURCE_TOKEN }}@github.com/TESOSOFTWARE/momlingo-mobile.git" \
+            source
+          cd source && git checkout "${{ github.event.client_payload.tag }}"
+
+      - name: Setup Flutter ${{ env.FLUTTER_VERSION }}
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Setup Ruby & Fastlane
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          working-directory: source
+          bundler-cache: true
+
+      - name: Flutter pub get
+        working-directory: source
+        run: flutter pub get
+
+      - name: Generate code (build_runner)
+        working-directory: source
+        run: flutter pub run build_runner build --delete-conflicting-outputs
+
+      - name: Install CocoaPods dependencies
+        working-directory: source/ios
+        run: bundle exec pod install --repo-update
+
+      - name: Setup iOS signing (${{ steps.params.outputs.flavor }})
+        working-directory: source
+        run: bundle exec fastlane ios prepare_${{ steps.params.outputs.flavor }}
+
+      - name: Build IPA archive (${{ steps.params.outputs.flavor }})
+        working-directory: source
+        run: |
+          flutter build ipa \
+            --flavor ${{ steps.params.outputs.flavor }} \
+            --dart-define=FLAVOR=${{ steps.params.outputs.flavor }} \
+            --release \
+            --build-name=${{ steps.params.outputs.version }} \
+            --build-number=${{ steps.params.outputs.build_number }}
+          echo "──────── build/ios/ structure ────────"
+          find build/ios -maxdepth 4 | sort
+          echo "──────────────────────────────────────"
+
+      - name: Export IPA (${{ steps.params.outputs.flavor }})
+        working-directory: source
+        run: |
+          ARCHIVE=$(find build/ios/archive -name "*.xcarchive" | head -1)
+          if [ -z "$ARCHIVE" ]; then
+            echo "ERROR: no .xcarchive found in build/ios/archive"
+            find build/ios -name "*.xcarchive" 2>/dev/null || echo "none anywhere"
+            exit 1
+          fi
+          echo "Archive: $ARCHIVE"
+          mkdir -p build/ios/ipa
+          xcodebuild -exportArchive \
+            -archivePath "$ARCHIVE" \
+            -exportPath build/ios/ipa \
+            -exportOptionsPlist ios/ExportOptions_${{ steps.params.outputs.flavor }}.plist
+          echo "──────── build/ios/ipa/ contents ─────"
+          find build/ios/ipa | sort
+          echo "──────────────────────────────────────"
+
+      - name: Upload to TestFlight (${{ steps.params.outputs.flavor }})
+        working-directory: source
+        env:
+          APP_STORE_ISSUER_ID: ${{ secrets.APP_STORE_ISSUER_ID }}
+        run: bundle exec fastlane ios deploy_${{ steps.params.outputs.flavor }}
