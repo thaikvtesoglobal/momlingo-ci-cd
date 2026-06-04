@@ -36,7 +36,7 @@ jobs:
     if: github.event.client_payload.platform == 'android' || github.event.client_payload.platform == 'both'
     steps:
       - name: Checkout CI repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Parse inputs từ tag
         id: params
@@ -67,7 +67,7 @@ jobs:
           cd source && git checkout "${{ github.event.client_payload.tag }}"
 
       - name: Setup Java ${{ env.JAVA_VERSION }}
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: zulu
           java-version: ${{ env.JAVA_VERSION }}
@@ -125,7 +125,7 @@ jobs:
     if: github.event.client_payload.platform != 'android'
     steps:
       - name: Checkout CI repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Parse inputs từ tag
         id: params
