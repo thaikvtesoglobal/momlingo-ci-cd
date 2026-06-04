@@ -62,7 +62,7 @@ jobs:
       - name: Clone source từ GitHub
         run: |
           git clone \
-            "https://x-access-token:${{ secrets.GITHUB_SOURCE_TOKEN }}@github.com/TESOSOFTWARE/momlingo-mobile.git" \
+            "https://x-access-token:${{ secrets.SOURCE_TOKEN }}@github.com/TESOSOFTWARE/momlingo-mobile.git" \
             source
           cd source && git checkout "${{ github.event.client_payload.tag }}"
 
@@ -149,7 +149,7 @@ jobs:
       - name: Clone source từ GitHub
         run: |
           git clone \
-            "https://x-access-token:${{ secrets.GITHUB_SOURCE_TOKEN }}@github.com/TESOSOFTWARE/momlingo-mobile.git" \
+            "https://x-access-token:${{ secrets.SOURCE_TOKEN }}@github.com/TESOSOFTWARE/momlingo-mobile.git" \
             source
           cd source && git checkout "${{ github.event.client_payload.tag }}"
 
