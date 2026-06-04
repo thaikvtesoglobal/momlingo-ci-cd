@@ -118,11 +118,11 @@ jobs:
         run: bundle exec fastlane android deploy_${{ steps.params.outputs.flavor }}
 
 # ============================================================
-# Job 2: iOS — macos-15
+# Job 2: iOS — macos-26
 # ============================================================
   deploy-ios:
     name: "iOS"
-    runs-on: macos-15
+    runs-on: macos-26
     if: github.event.client_payload.platform != 'android'
     steps:
       - name: Checkout CI repo
@@ -197,8 +197,17 @@ jobs:
         working-directory: source
         run: bundle exec fastlane ios prepare_${{ steps.params.outputs.flavor }}
 
+      - name: Switch Xcode version
+        run: |
+          sudo xcode-select --switch /Applications/Xcode_26.4.1.app
+          echo "=== Xcode sau khi switch ==="
+          xcode-select -p
+          xcodebuild -version
+
       - name: Build IPA archive (${{ steps.params.outputs.flavor }})
         working-directory: source
+        env:
+          DEVELOPER_DIR: /Applications/Xcode_26.4.1.app/Contents/Developer
         run: |
           flutter build ipa \
             --flavor ${{ steps.params.outputs.flavor }} \
@@ -212,6 +221,8 @@ jobs:
 
       - name: Export IPA (${{ steps.params.outputs.flavor }})
         working-directory: source
+        env:
+          DEVELOPER_DIR: /Applications/Xcode_26.4.1.app/Contents/Developer
         run: |
           ARCHIVE=$(find build/ios/archive -name "*.xcarchive" | head -1)
           if [ -z "$ARCHIVE" ]; then
