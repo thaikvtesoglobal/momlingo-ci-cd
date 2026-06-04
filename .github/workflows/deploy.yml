@@ -90,6 +90,14 @@ jobs:
         working-directory: source
         run: flutter pub get
 
+      - name: Flutter pub get (gamelingo)
+        working-directory: source/modules/gamelingo
+        run: flutter pub get
+
+      - name: Generate gamelingo assets (flutter_gen)
+        working-directory: source/modules/gamelingo
+        run: dart run build_runner build --build-filter="flutter_gen" --delete-conflicting-outputs
+
       - name: Generate code (build_runner)
         working-directory: source
         run: flutter pub run build_runner build --delete-conflicting-outputs
@@ -162,6 +170,14 @@ jobs:
       - name: Flutter pub get
         working-directory: source
         run: flutter pub get
+
+      - name: Flutter pub get (gamelingo)
+        working-directory: source/modules/gamelingo
+        run: flutter pub get
+
+      - name: Generate gamelingo assets (flutter_gen)
+        working-directory: source/modules/gamelingo
+        run: dart run build_runner build --build-filter="flutter_gen" --delete-conflicting-outputs
 
       - name: Generate code (build_runner)
         working-directory: source
