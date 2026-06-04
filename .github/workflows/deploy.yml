@@ -98,7 +98,8 @@ jobs:
         working-directory: source/modules/gamelingo
         run: |
           dart pub global activate flutter_gen
-          dart pub global run flutter_gen -c pubspec.yaml
+          export PATH="$PATH:$HOME/.pub-cache/bin"
+          fluttergen -c pubspec.yaml
 
       - name: Generate code (build_runner)
         working-directory: source
@@ -181,7 +182,8 @@ jobs:
         working-directory: source/modules/gamelingo
         run: |
           dart pub global activate flutter_gen
-          dart pub global run flutter_gen -c pubspec.yaml
+          export PATH="$PATH:$HOME/.pub-cache/bin"
+          fluttergen -c pubspec.yaml
 
       - name: Generate code (build_runner)
         working-directory: source
