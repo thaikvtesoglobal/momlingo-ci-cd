@@ -103,7 +103,7 @@ jobs:
 
       - name: Generate code (build_runner)
         working-directory: source
-        run: flutter pub run build_runner build --delete-conflicting-outputs
+        run: dart run build_runner build --delete-conflicting-outputs
 
       - name: Fastlane — Deploy Android (${{ steps.params.outputs.flavor }})
         working-directory: source
@@ -187,7 +187,7 @@ jobs:
 
       - name: Generate code (build_runner)
         working-directory: source
-        run: flutter pub run build_runner build --delete-conflicting-outputs
+        run: dart run build_runner build --delete-conflicting-outputs
 
       - name: Install CocoaPods dependencies
         working-directory: source/ios
