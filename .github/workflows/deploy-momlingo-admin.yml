@@ -38,7 +38,7 @@ jobs:
       - name: Clone momlingo-admin source
         run: |
           git clone \
-            "https://x-access-token:${{ secrets.MOMLINGO_ADMIN_SOURCE_TOKEN }}@github.com/TESOSOFTWARE/momlingo-admin.git" \
+            "https://x-access-token:${{ secrets.MOMLINGO_SOURCE_TOKEN }}@github.com/TESOSOFTWARE/momlingo-admin.git" \
             source
           cd source && git checkout "${{ github.event.client_payload.sha }}"
 
