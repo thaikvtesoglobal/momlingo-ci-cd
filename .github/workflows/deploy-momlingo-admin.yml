@@ -30,9 +30,11 @@ jobs:
           if [ "$ENV" = "prod" ]; then
             echo "image_name=momlingo-admin" >> $GITHUB_OUTPUT
             echo "dockerfile=Dockerfile.prod" >> $GITHUB_OUTPUT
+            echo "env_file=.env.prod" >> $GITHUB_OUTPUT
           else
             echo "image_name=momlingo-admin-dev" >> $GITHUB_OUTPUT
             echo "dockerfile=Dockerfile" >> $GITHUB_OUTPUT
+            echo "env_file=.env.dev" >> $GITHUB_OUTPUT
           fi
 
       - name: Clone momlingo-admin source
@@ -88,5 +90,5 @@ jobs:
           password: ${{ secrets.MOMLINGO_ADMIN_VPS_PASSWORD_DEV }}
           script: |
             cd momlingo/momlingo_be
-            docker compose --env-file .env.dev pull momlingo-admin
-            docker compose --env-file .env.dev up -d momlingo-admin
+            docker compose --env-file ${{ steps.vars.outputs.env_file }} pull momlingo-admin
+            docker compose --env-file ${{ steps.vars.outputs.env_file }} up -d momlingo-admin
