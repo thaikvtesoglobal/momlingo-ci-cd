@@ -88,5 +88,5 @@ jobs:
           password: ${{ secrets.MOMLINGO_ADMIN_VPS_PASSWORD_DEV }}
           script: |
             cd momlingo/momlingo_be
-            docker compose pull momlingo-admin
-            docker compose up -d momlingo-admin
+            docker compose --env-file .env.dev pull momlingo-admin
+            docker compose --env-file .env.dev up -d momlingo-admin
