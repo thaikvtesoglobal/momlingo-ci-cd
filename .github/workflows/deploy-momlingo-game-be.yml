@@ -1,0 +1,75 @@
+# ============================================================
+# Momlingo Game BE (API) — GitHub Actions CI/CD
+#
+# File này thuộc GitHub public repo (momlingo-ci-cd).
+# KHÔNG commit source code momlingo-game-be vào repo này.
+#
+# Trigger duy nhất: repository_dispatch từ momlingo-game-be
+# (workflow "Trigger Deploy" chạy khi push vào nhánh develop/main).
+# ============================================================
+
+name: Deploy Momlingo Game BE
+
+on:
+  repository_dispatch:
+    types: [deploy-momlingo-game-be]
+
+# ── Payload từ momlingo-game-be Actions ─────────────────────
+# github.event.client_payload.env   (dev | prod)
+# github.event.client_payload.sha   (commit vừa merge)
+
+jobs:
+  build-and-deploy:
+    name: "Build & Deploy (${{ github.event.client_payload.env }})"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve image/dockerfile theo env
+        id: vars
+        run: |
+          ENV="${{ github.event.client_payload.env }}"
+          if [ "$ENV" = "prod" ]; then
+            echo "image_name=momlingo-game-be" >> $GITHUB_OUTPUT
+            echo "dockerfile=Dockerfile.prod" >> $GITHUB_OUTPUT
+            echo "env_file=.env.prod" >> $GITHUB_OUTPUT
+          else
+            echo "image_name=momlingo-game-be-dev" >> $GITHUB_OUTPUT
+            echo "dockerfile=Dockerfile" >> $GITHUB_OUTPUT
+            echo "env_file=.env.dev" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Clone momlingo-game-be source
+        run: |
+          git clone \
+            "https://x-access-token:${{ secrets.MOMLINGO_SOURCE_TOKEN }}@github.com/TESOSOFTWARE/momlingo-game-be.git" \
+            source
+          cd source && git checkout "${{ github.event.client_payload.sha }}"
+
+      - name: Login GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: tesosoftware
+          password: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build & push image
+        uses: docker/build-push-action@v6
+        with:
+          context: source
+          file: source/${{ steps.vars.outputs.dockerfile }}
+          push: true
+          tags: ghcr.io/tesosoftware/${{ steps.vars.outputs.image_name }}:latest
+
+      - name: Deploy on VPS dev
+        if: github.event.client_payload.env == 'dev'
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.MOMLINGO_GAME_VPS_HOST_DEV }}
+          username: ${{ secrets.MOMLINGO_GAME_VPS_USER_DEV }}
+          password: ${{ secrets.MOMLINGO_GAME_VPS_PASSWORD_DEV }}
+          script: |
+            cd momlingo/momlingo_be
+            docker compose --env-file ${{ steps.vars.outputs.env_file }} pull game-api
+            docker compose --env-file ${{ steps.vars.outputs.env_file }} up -d game-api
