@@ -9,11 +9,11 @@
 #   2. GitHub Actions (momlingo-mobile) — tự động điền đủ inputs
 # ============================================================
 
-name: Build & Deploy
+name: Deploy Momlingo Mobile
 
 on:
   repository_dispatch:
-    types: [deploy]
+    types: [deploy-momlingo-mobile]
 
 env:
   FLUTTER_VERSION: "3.38.5"
