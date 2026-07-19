@@ -73,3 +73,15 @@ jobs:
             cd momlingo/momlingo_be
             docker compose --env-file ${{ steps.vars.outputs.env_file }} pull app
             docker compose --env-file ${{ steps.vars.outputs.env_file }} up -d app
+
+      - name: Deploy on VPS prod
+        if: github.event.client_payload.env == 'prod'
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.MOMLINGO_VPS_HOST_PROD }}
+          username: ${{ secrets.MOMLINGO_VPS_USER_PROD }}
+          key: ${{ secrets.MOMLINGO_VPS_SSH_KEY_PROD }}
+          script: |
+            cd momlingo/momlingo_be
+            docker compose --env-file ${{ steps.vars.outputs.env_file }} pull momlingo-app
+            docker compose --env-file ${{ steps.vars.outputs.env_file }} up -d momlingo-app
