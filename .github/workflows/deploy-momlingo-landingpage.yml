@@ -1,0 +1,71 @@
+# ============================================================
+# Momlingo Landing Page — GitHub Actions CI/CD
+#
+# File này thuộc GitHub public repo (momlingo-ci-cd).
+# KHÔNG commit source code momlingo-landingpage vào repo này.
+#
+# Trigger duy nhất: repository_dispatch từ momlingo-landingpage
+# (workflow "Trigger Deploy" chạy khi push vào nhánh main).
+#
+# Landing page là static export (next.config.mjs: output: 'export'),
+# không build Docker image — deploy bằng cách đẩy thẳng thư mục out/
+# vào đường dẫn được bind-mount (read-only) vào container
+# momlingo-home-page (nginx:alpine) trên server.
+# ============================================================
+
+name: Deploy Momlingo Landing Page
+
+on:
+  repository_dispatch:
+    types: [deploy-momlingo-landingpage]
+
+# ── Payload từ momlingo-landingpage Actions ─────────────────
+# github.event.client_payload.sha   (commit vừa merge vào main)
+
+jobs:
+  build-and-deploy:
+    name: "Build & Deploy"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone momlingo-landingpage source
+        run: |
+          git clone \
+            "https://x-access-token:${{ secrets.MOMLINGO_SOURCE_TOKEN }}@github.com/TESOSOFTWARE/momlingo-landingpage.git" \
+            source
+          cd source && git checkout "${{ github.event.client_payload.sha }}"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: source/package-lock.json
+
+      - name: Install & build static export
+        working-directory: source
+        run: |
+          npm ci
+          npm run build
+
+      - name: Upload out/ to staging dir on server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.MOMLINGO_LANDINGPAGE_VPS_HOST }}
+          username: ${{ secrets.MOMLINGO_LANDINGPAGE_VPS_USER }}
+          password: ${{ secrets.MOMLINGO_LANDINGPAGE_VPS_PASSWORD }}
+          source: "source/out/*"
+          target: "/home/thai_mb_freelance/deploy-tmp/momlingo-home-page"
+          strip_components: 2
+          overwrite: true
+
+      - name: Sync staging dir into live mount + cleanup
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.MOMLINGO_LANDINGPAGE_VPS_HOST }}
+          username: ${{ secrets.MOMLINGO_LANDINGPAGE_VPS_USER }}
+          password: ${{ secrets.MOMLINGO_LANDINGPAGE_VPS_PASSWORD }}
+          script: |
+            rsync -avz --delete \
+              /home/thai_mb_freelance/deploy-tmp/momlingo-home-page/ \
+              /home/hon_teso/static-sites/momlingo-home-page/
+            rm -rf /home/thai_mb_freelance/deploy-tmp/momlingo-home-page
