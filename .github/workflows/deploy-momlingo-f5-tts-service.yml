@@ -52,6 +52,8 @@ jobs:
           file: source/Dockerfile
           push: true
           tags: ghcr.io/tesosoftware/momlingo-f5-tts-service-dev:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Deploy on VPS dev
         uses: appleboy/ssh-action@v1.2.0
