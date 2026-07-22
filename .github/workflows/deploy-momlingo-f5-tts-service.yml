@@ -79,7 +79,25 @@ jobs:
           password: ${{ secrets.MOMLINGO_F5TTS_VPS_PASSWORD_DEV }}
           script: |
             cd momlingo/momlingo_f5tts
+            mkdir -p models/vi data
+
             docker compose -f ${{ steps.vars.outputs.compose_file }} --env-file ${{ steps.vars.outputs.env_file }} pull f5-tts-service
+
+            # VI checkpoint (~5.4GB) isn't baked into the image — download once per
+            # host, straight into the bind-mounted ./models volume, using the image
+            # we just pulled (it already has huggingface_hub as an f5-tts dependency).
+            if [ ! -f models/vi/model_last.pt ] || [ ! -f models/vi/vocab.txt ]; then
+              echo "VI checkpoint missing on this host — downloading (one-time, may take a few minutes)..."
+              docker run --rm -v "$(pwd)/models:/app/models" \
+                ghcr.io/tesosoftware/${{ steps.vars.outputs.image_name }}:latest \
+                python -c "
+            from huggingface_hub import hf_hub_download
+            import shutil
+            shutil.copy(hf_hub_download('hynt/F5-TTS-Vietnamese-ViVoice', 'config.json'), '/app/models/vi/vocab.txt')
+            shutil.copy(hf_hub_download('hynt/F5-TTS-Vietnamese-ViVoice', 'model_last.pt'), '/app/models/vi/model_last.pt')
+            "
+            fi
+
             docker compose -f ${{ steps.vars.outputs.compose_file }} --env-file ${{ steps.vars.outputs.env_file }} up -d f5-tts-service
 
       - name: Deploy on VPS prod
@@ -91,5 +109,23 @@ jobs:
           key: ${{ secrets.MOMLINGO_F5TTS_VPS_SSH_KEY_PROD }}
           script: |
             cd momlingo/momlingo_f5tts
+            mkdir -p models/vi data
+
             docker compose -f ${{ steps.vars.outputs.compose_file }} --env-file ${{ steps.vars.outputs.env_file }} pull f5-tts-service
+
+            # VI checkpoint (~5.4GB) isn't baked into the image — download once per
+            # host, straight into the bind-mounted ./models volume, using the image
+            # we just pulled (it already has huggingface_hub as an f5-tts dependency).
+            if [ ! -f models/vi/model_last.pt ] || [ ! -f models/vi/vocab.txt ]; then
+              echo "VI checkpoint missing on this host — downloading (one-time, may take a few minutes)..."
+              docker run --rm -v "$(pwd)/models:/app/models" \
+                ghcr.io/tesosoftware/${{ steps.vars.outputs.image_name }}:latest \
+                python -c "
+            from huggingface_hub import hf_hub_download
+            import shutil
+            shutil.copy(hf_hub_download('hynt/F5-TTS-Vietnamese-ViVoice', 'config.json'), '/app/models/vi/vocab.txt')
+            shutil.copy(hf_hub_download('hynt/F5-TTS-Vietnamese-ViVoice', 'model_last.pt'), '/app/models/vi/model_last.pt')
+            "
+            fi
+
             docker compose -f ${{ steps.vars.outputs.compose_file }} --env-file ${{ steps.vars.outputs.env_file }} up -d f5-tts-service
