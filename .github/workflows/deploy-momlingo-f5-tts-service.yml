@@ -5,13 +5,12 @@
 # KHÔNG commit source code momlingo-f5-tts-service vào repo này.
 #
 # Trigger duy nhất: repository_dispatch từ momlingo-f5-tts-service
-# (workflow "Trigger Deploy" chạy khi push vào nhánh dev/main).
+# (workflow "Trigger Deploy" chạy khi push vào nhánh dev).
 #
-# Service này deploy bằng docker-compose.dev.yml / docker-compose.prod.yml
-# riêng của repo (không dùng chung stack docker-compose momlingo-backend),
-# nên cần một thư mục deploy riêng trên VPS + secrets VPS riêng — dù hiện
-# tại có thể trỏ vào cùng VPS với backend, việc tách secrets giúp dễ dàng
-# chuyển sang server khác (vd. có GPU) sau này mà không cần sửa workflow.
+# Chỉ có môi trường dev — không deploy prod riêng cho service này.
+# Server dev đủ mạnh để phục vụ, các service khác (backend/admin)
+# gọi thẳng qua tts.dev.momlingo.com kể cả khi bản thân chúng chạy
+# ở môi trường prod.
 # ============================================================
 
 name: Deploy Momlingo F5-TTS Service
@@ -21,30 +20,14 @@ on:
     types: [deploy-momlingo-f5-tts-service]
 
 # ── Payload từ momlingo-f5-tts-service Actions ──────────────
-# github.event.client_payload.env   (dev | prod)
+# github.event.client_payload.env   (dev)
 # github.event.client_payload.sha   (commit vừa merge)
 
 jobs:
   build-and-deploy:
-    name: "Build & Deploy (${{ github.event.client_payload.env }})"
+    name: "Build & Deploy (dev)"
     runs-on: ubuntu-latest
     steps:
-      - name: Resolve image/dockerfile theo env
-        id: vars
-        run: |
-          ENV="${{ github.event.client_payload.env }}"
-          if [ "$ENV" = "prod" ]; then
-            echo "image_name=momlingo-f5-tts-service" >> $GITHUB_OUTPUT
-            echo "dockerfile=Dockerfile.prod" >> $GITHUB_OUTPUT
-            echo "compose_file=docker-compose.prod.yml" >> $GITHUB_OUTPUT
-            echo "env_file=.env.prod" >> $GITHUB_OUTPUT
-          else
-            echo "image_name=momlingo-f5-tts-service-dev" >> $GITHUB_OUTPUT
-            echo "dockerfile=Dockerfile" >> $GITHUB_OUTPUT
-            echo "compose_file=docker-compose.dev.yml" >> $GITHUB_OUTPUT
-            echo "env_file=.env.dev" >> $GITHUB_OUTPUT
-          fi
-
       - name: Clone momlingo-f5-tts-service source
         run: |
           git clone \
@@ -66,22 +49,22 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: source
-          file: source/${{ steps.vars.outputs.dockerfile }}
+          file: source/Dockerfile
           push: true
-          tags: ghcr.io/tesosoftware/${{ steps.vars.outputs.image_name }}:latest
+          tags: ghcr.io/tesosoftware/momlingo-f5-tts-service-dev:latest
 
       - name: Deploy on VPS dev
-        if: github.event.client_payload.env == 'dev'
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.MOMLINGO_F5TTS_VPS_HOST_DEV }}
           username: ${{ secrets.MOMLINGO_F5TTS_VPS_USER_DEV }}
           password: ${{ secrets.MOMLINGO_F5TTS_VPS_PASSWORD_DEV }}
+          command_timeout: 60m
           script: |
             cd momlingo/momlingo_f5tts
             mkdir -p models/vi data
 
-            docker compose -f ${{ steps.vars.outputs.compose_file }} --env-file ${{ steps.vars.outputs.env_file }} pull f5-tts-service
+            docker compose -f docker-compose.dev.yml --env-file .env.dev pull f5-tts-service
 
             # VI checkpoint (~5.4GB) isn't baked into the image — download once per
             # host, straight into the bind-mounted ./models volume, using the image
@@ -89,7 +72,7 @@ jobs:
             if [ ! -f models/vi/model_last.pt ] || [ ! -f models/vi/vocab.txt ]; then
               echo "VI checkpoint missing on this host — downloading (one-time, may take a few minutes)..."
               docker run --rm -v "$(pwd)/models:/app/models" \
-                ghcr.io/tesosoftware/${{ steps.vars.outputs.image_name }}:latest \
+                ghcr.io/tesosoftware/momlingo-f5-tts-service-dev:latest \
                 python -c "
             from huggingface_hub import hf_hub_download
             import shutil
@@ -98,34 +81,4 @@ jobs:
             "
             fi
 
-            docker compose -f ${{ steps.vars.outputs.compose_file }} --env-file ${{ steps.vars.outputs.env_file }} up -d f5-tts-service
-
-      - name: Deploy on VPS prod
-        if: github.event.client_payload.env == 'prod'
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.MOMLINGO_F5TTS_VPS_HOST_PROD }}
-          username: ${{ secrets.MOMLINGO_F5TTS_VPS_USER_PROD }}
-          key: ${{ secrets.MOMLINGO_F5TTS_VPS_SSH_KEY_PROD }}
-          script: |
-            cd momlingo/momlingo_f5tts
-            mkdir -p models/vi data
-
-            docker compose -f ${{ steps.vars.outputs.compose_file }} --env-file ${{ steps.vars.outputs.env_file }} pull f5-tts-service
-
-            # VI checkpoint (~5.4GB) isn't baked into the image — download once per
-            # host, straight into the bind-mounted ./models volume, using the image
-            # we just pulled (it already has huggingface_hub as an f5-tts dependency).
-            if [ ! -f models/vi/model_last.pt ] || [ ! -f models/vi/vocab.txt ]; then
-              echo "VI checkpoint missing on this host — downloading (one-time, may take a few minutes)..."
-              docker run --rm -v "$(pwd)/models:/app/models" \
-                ghcr.io/tesosoftware/${{ steps.vars.outputs.image_name }}:latest \
-                python -c "
-            from huggingface_hub import hf_hub_download
-            import shutil
-            shutil.copy(hf_hub_download('hynt/F5-TTS-Vietnamese-ViVoice', 'config.json'), '/app/models/vi/vocab.txt')
-            shutil.copy(hf_hub_download('hynt/F5-TTS-Vietnamese-ViVoice', 'model_last.pt'), '/app/models/vi/model_last.pt')
-            "
-            fi
-
-            docker compose -f ${{ steps.vars.outputs.compose_file }} --env-file ${{ steps.vars.outputs.env_file }} up -d f5-tts-service
+            docker compose -f docker-compose.dev.yml --env-file .env.dev up -d f5-tts-service
