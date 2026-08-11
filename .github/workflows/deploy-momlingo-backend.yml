@@ -70,9 +70,12 @@ jobs:
           username: ${{ secrets.MOMLINGO_BACKEND_VPS_USER_DEV }}
           password: ${{ secrets.MOMLINGO_BACKEND_VPS_PASSWORD_DEV }}
           script: |
+            set -e
             cd momlingo/momlingo_be
             docker compose --env-file ${{ steps.vars.outputs.env_file }} pull app
             docker compose --env-file ${{ steps.vars.outputs.env_file }} up -d app
+            # dist/ only (no ts-node/tsconfig in the image) — run the compiled-JS variant.
+            docker compose --env-file ${{ steps.vars.outputs.env_file }} exec -T app yarn migration:run:prod
 
       - name: Deploy on VPS prod
         if: github.event.client_payload.env == 'prod'
@@ -82,6 +85,9 @@ jobs:
           username: ${{ secrets.MOMLINGO_VPS_USER_PROD }}
           key: ${{ secrets.MOMLINGO_VPS_SSH_KEY_PROD }}
           script: |
+            set -e
             cd momlingo/momlingo_be
             docker compose --env-file ${{ steps.vars.outputs.env_file }} pull momlingo-app
             docker compose --env-file ${{ steps.vars.outputs.env_file }} up -d momlingo-app
+            # dist/ only (no ts-node/tsconfig in the image) — run the compiled-JS variant.
+            docker compose --env-file ${{ steps.vars.outputs.env_file }} exec -T momlingo-app yarn migration:run:prod
