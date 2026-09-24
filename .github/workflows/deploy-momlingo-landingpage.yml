@@ -54,6 +54,7 @@ jobs:
       - name: Deploy on VPS
         uses: appleboy/ssh-action@v1.2.0
         with:
+          command_timeout: 30m
           host: ${{ secrets.MOMLINGO_LANDINGPAGE_VPS_HOST }}
           username: ${{ secrets.MOMLINGO_LANDINGPAGE_VPS_USER }}
           password: ${{ secrets.MOMLINGO_LANDINGPAGE_VPS_PASSWORD }}
